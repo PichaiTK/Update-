@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MyApp — Ads + Auth Demo (Frontend)</title>
+
+  <!-- hls.js for HLS playback on non-Safari -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+  <style>
+:root{
+  --bg:#f5f7fb; --card:#fff; --accent:#2563eb; --text:#0b1220; --muted:#64748b; --radius:10px;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,"Noto Sans",Arial;background:var(--bg);color:var(--text);font-size:15px}
+.header{display:flex;align-items:center;padding:12px 16px;background:#fff;border-bottom:1px solid #e6edf6}
+.brand{font-weight:700}
+.spacer{flex:1}
+.container{padding:18px;max-width:1100px;margin:0 auto}
+.card{background:var(--card);padding:12px;border-radius:var(--radius);box-shadow:0 2px 10px rgba(7,12,34,0.04);margin-bottom:12px}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.carousel{position:relative;border-radius:8px;overflow:hidden;background:#000;height:360px}
+.slides{display:flex;transition:transform .5s ease;height:100%}
+.slide{min-width:100%;height:100%;position:relative;display:flex;align-items:center;justify-content:center}
+.slide img, .slide video{width:100%;height:100%;object-fit:cover;display:block}
+.controls{position:absolute;top:50%;left:0;right:0;display:flex;justify-content:space-between;transform:translateY(-50%);pointer-events:none;padding:0 8px}
+.controls button{pointer-events:auto;background:rgba(0,0,0,.45);border-radius:6px;padding:8px;color:#fff;border:none}
+.indicators{position:absolute;left:50%;transform:translateX(-50%);bottom:10px;display:flex;gap:6px}
+.dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,0.6);cursor:pointer;border:2px solid rgba(0,0,0,0.25)}
+.dot.active{background:var(--accent)}
+.auth-grid{display:flex;gap:12px;flex-wrap:wrap}
+.auth-form{min-width:260px;flex:1;display:flex;flex-direction:column;gap:8px}
+.auth-form input, .auth-form select, .auth-form button{width:100%;padding:8px;border-radius:6px;border:1px solid #dfe7f3}
+.user-area{display:flex;gap:8px;align-items:center}
+.ad-controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:8px;border-bottom:1px solid #eef2ff;text-align:left}
+button.primary{background:var(--accent);color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer}
+.modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.5);z-index:100}
+.modal .inner{background:#fff;padding:16px;border-radius:8px;width:90%;max-width:720px}
+@media(max-width:800px){
+  .carousel{height:220px}
+  .auth-grid{flex-direction:column}
+}
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="brand">PichaiTK</div>
+    <div class="spacer"></div>
+    <div id="user-area" class="user-area"></div>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h3>Ads Carousel (Auto-slide) — รูป, MP4, HLS</h3>
+      <div id="carousel" class="carousel" aria-roledescription="carousel">
+        <div id="slides" class="slides"></div>
+        <div class="controls">
+          <button id="prev" aria-label="Previous">◀</button>
+          <button id="next" aria-label="Next">▶</button>
+        </div>
+        <div id="indicators" class="indicators"></div>
+      </div>
+      <p class="muted">Hover to pause. HLS (.m3u8) supported via hls.js. Admin can manage ads via Ads Manager.</p>
+    </section>
+
+    <section class="card">
+      <div class="auth-grid">
+        <div class="auth-form">
+          <h4>Sign Up</h4>
+          <input id="su-name" placeholder="Full name" />
+          <input id="su-email" placeholder="Email" />
+          <input id="su-password" placeholder="Password (min 6)" type="password" />
+          <select id="su-role"><option>USER</option><option>PREMIUM</option></select>
+          <button id="btn-signup" class="primary">Create account</button>
+          <div id="su-msg" class="small muted"></div>
+        </div>
+
+        <div class="auth-form">
+          <h4>Log In</h4>
+          <input id="li-email" placeholder="Email" />
+          <input id="li-password" placeholder="Password" type="password" />
+          <button id="btn-login" class="primary">Sign in</button>
+          <div id="li-msg" class="small muted"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="ads-manager" style="display:none">
+      <h4>Ads Manager (Admin)</h4>
+      <div class="ad-controls">
+        <select id="ad-type"><option value="image">Image</option><option value="video">Video (MP4/HLS)</option></select>
+        <input id="ad-src" placeholder="URL (.jpg/.png or .mp4/.m3u8)" />
+        <input id="ad-thumb" placeholder="Thumbnail (optional)" />
+        <input id="ad-caption" placeholder="Caption (optional)" />
+        <input id="ad-duration" type="number" placeholder="Duration ms (image)" />
+        <button id="btn-add-ad" class="primary">Add Ad</button>
+      </div>
+
+      <table id="ads-table"><thead><tr><th>#</th><th>Type</th><th>Src</th><th>Caption</th><th>Action</th></tr></thead><tbody></tbody></table>
+    </section>
+
+    <section class="card">
+      <h4>Notes</h4>
+      <p class="muted">Frontend tries to GET /api/ads. If API fails, it will fallback to localStorage demo ads. Signup/Login POST to /api/auth/signup and /api/auth/login respectively. Login should return JSON { token, user } where token is a JWT; frontend stores token in memory/localStorage (recommend server-set httpOnly cookie in production).</p>
+    </section>
+  </main>
+
+  <div id="modal" class="modal"><div class="inner"><div id="modal-body"></div><div style="text-align:right;margin-top:12px"><button id="modal-close" class="primary">Close</button></div></div></div>
+
+  <script>
+/*
+  Single-file frontend that:
+  - Fetches ads from backend GET /api/ads (fallback to localStorage)
+  - Plays images, MP4, and HLS (.m3u8 via hls.js)
+  - Signup POST /api/auth/signup, Login POST /api/auth/login
+  - Stores JWT token in localStorage (demo). In production use httpOnly cookie.
+  - Admin actions: POST /api/ads (requires Authorization: Bearer <token> with role ADMIN)
+  - Config: set API_BASE to backend origin (default "")
+*/
+
+const API_BASE = ''; // e.g. 'https://api.example.com' or '' for same origin
+const ADS_API = `${API_BASE}/api/ads`;
+const SIGNUP_API = `${API_BASE}/api/auth/signup`;
+const LOGIN_API = `${API_BASE}/api/auth/login`;
+
+const LOCAL_ADS_KEY = 'demo_ads_v1';
+const TOKEN_KEY = 'demo_jwt_v1';
+const USER_KEY = 'demo_user_v1';
+
+/* ---------------- Utilities ---------------- */
+function $$(sel){ return Array.from(document.querySelectorAll(sel)); }
+function q(sel){ return document.querySelector(sel); }
+function escapeHtml(s){ return (s+'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function now(){ return new Date().toISOString(); }
+
+/* ---------------- Local demo ads (fallback) ---------------- */
+function defaultDemoAds(){
+  return [
+    { id:'a1', type:'image', src:'https://placehold.co/980x360?text=Ad+Image+1', caption:'Sale 50%', duration:5000 },
+    { id:'a2', type:'video', src:'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerFun.mp4', caption:'Promo Video', duration:8000 },
+    { id:'a3', type:'image', src:'https://placehold.co/980x360?text=Ad+Image+2', caption:'New Arrival', duration:5000 }
+  ];
+}
+function saveLocalAds(arr){ localStorage.setItem(LOCAL_ADS_KEY, JSON.stringify(arr)); }
+function loadLocalAds(){ try{ return JSON.parse(localStorage.getItem(LOCAL_ADS_KEY) || 'null') || defaultDemoAds(); } catch(e){ return defaultDemoAds(); } }
+
+/* ---------------- Auth helpers ---------------- */
+function saveToken(token){ localStorage.setItem(TOKEN_KEY, token); }
+function loadToken(){ return localStorage.getItem(TOKEN_KEY); }
+function saveUser(user){ localStorage.setItem(USER_KEY, JSON.stringify(user)); }
+function loadUser(){ try{ return JSON.parse(localStorage.getItem(USER_KEY) || 'null'); } catch(e){ return null; } }
+function clearSession(){ localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(USER_KEY); }
+
+/* ---------------- API helpers ---------------- */
+async function apiGetAds(){
+  try{
+    const res = await fetch(ADS_API, { method:'GET', credentials:'include' });
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    if(Array.isArray(data)) return data;
+    // sometimes API returns { data: [...] }
+    if(Array.isArray(data.data)) return data.data;
+    throw new Error('unexpected response');
+  }catch(err){
+    console.warn('apiGetAds failed, using local ads:', err);
+    return loadLocalAds();
+  }
+}
+
+async function apiSignup(body){
+  const res = await fetch(SIGNUP_API, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), credentials:'include' });
+  const j = await res.json();
+  if(!res.ok) throw j;
+  return j;
+}
+
+async function apiLogin(body){
+  const res = await fetch(LOGIN_API, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body), credentials:'include' });
+  const j = await res.json();
+  if(!res.ok) throw j;
+  return j;
+}
+
+async function apiCreateAd(ad){
+  // admin-only: require JWT in Authorization header
+  const token = loadToken();
+  const headers = { 'Content-Type':'application/json' };
+  if(token) headers['Authorization'] = 'Bearer ' + token;
+  const res = await fetch(ADS_API, { method:'POST', headers, body: JSON.stringify(ad), credentials: 'include' });
+  const j = await res.json();
+  if(!res.ok) throw j;
+  return j;
+}
+
+/* ---------------- Carousel (supports HLS via hls.js) ---------------- */
+let ads = [];
+let currentIndex = 0;
+let autoTimer = null;
+const slidesEl = q('#slides');
+const indicatorsEl = q('#indicators');
+const carouselEl = q('#carousel');
+
+function renderSlides(){
+  slidesEl.innerHTML = '';
+  indicatorsEl.innerHTML = '';
+  if(!ads || ads.length === 0){
+    slidesEl.innerHTML = `<div class="slide"><div class="small muted">No ads</div></div>`;
+    return;
+  }
+  ads.forEach((ad, idx) => {
+    const sl = document.createElement('div'); sl.className='slide'; sl.dataset.index = idx;
+    if(ad.type === 'image'){
+      const img = document.createElement('img'); img.src = ad.src; img.alt = ad.caption || 'ad'; sl.appendChild(img);
+    } else if(ad.type === 'video'){
+      const video = document.createElement('video'); video.muted = true; video.playsInline = true; video.controls = false; video.style.width='100%'; video.style.height='100%';
+      // for HLS: we'll attach Hls when the slide is active
+      if(ad.src.endsWith('.m3u8') && window.Hls && Hls.isSupported()){
+        // keep _hlsSrc for later attach
+        video.dataset.hls = ad.src;
+      } else {
+        video.src = ad.src;
+        video.loop = true;
+      }
+      sl.appendChild(video);
+    }
+    if(ad.caption){
+      const o = document.createElement('div');
+      o.style.position='absolute'; o.style.left='12px'; o.style.bottom='12px'; o.style.color='#fff'; o.style.padding='6px 10px'; o.style.background='rgba(0,0,0,0.25)'; o.style.borderRadius='8px';
+      o.textContent = ad.caption;
+      sl.appendChild(o);
+    }
+    slidesEl.appendChild(sl);
+    const dot = document.createElement('div'); dot.className='dot'; dot.dataset.index = idx;
+    dot.addEventListener('click', ()=> goToSlide(idx));
+    indicatorsEl.appendChild(dot);
+  });
+  updatePosition();
+  startAuto();
+}
+
+function updatePosition(){
+  const w = carouselEl.clientWidth;
+  slidesEl.style.transform = `translateX(-${currentIndex * w}px)`;
+  $$('.dot').forEach(d=> d.classList.remove('active'));
+  const active = indicatorsEl.querySelector(`[data-index="${currentIndex}"]`);
+  if(active) active.classList.add('active');
+
+  // manage videos (attach HLS for active)
+  const slideNodes = $$('.slide');
+  slideNodes.forEach((sl, i) => {
+    const vid = sl.querySelector('video');
+    if(vid){
+      if(i === currentIndex){
+        // attach HLS if needed
+        if(vid.dataset.hls && !vid._hlsAttached && window.Hls && Hls.isSupported()){
+          const hls = new Hls();
+          hls.loadSource(vid.dataset.hls);
+          hls.attachMedia(vid);
+          vid._hlsAttached = true;
+          vid._hlsObj = hls;
+        }
+        vid.play().catch(()=>{});
+      } else {
+        vid.pause();
+      }
+    }
+  });
+}
+
+function nextSlide(){ currentIndex = (currentIndex + 1) % Math.max(1, ads.length); updatePosition(); restartAuto(); }
+function prevSlide(){ currentIndex = (currentIndex - 1 + Math.max(1, ads.length)) % Math.max(1, ads.length); updatePosition(); restartAuto(); }
+function goToSlide(i){ currentIndex = i; updatePosition(); restartAuto(); }
+
+function startAuto(){
+  stopAuto();
+  if(!ads || ads.length === 0) return;
+  const duration = ads[currentIndex]?.duration || 5000;
+  autoTimer = setTimeout(()=>{ nextSlide(); startAuto(); }, duration);
+}
+function stopAuto(){ if(autoTimer){ clearTimeout(autoTimer); autoTimer = null; } }
+function restartAuto(){ stopAuto(); startAuto(); }
+
+carouselEl.addEventListener('mouseenter', ()=> stopAuto());
+carouselEl.addEventListener('mouseleave', ()=> startAuto());
+window.addEventListener('resize', ()=> updatePosition());
+q('#next').addEventListener('click', ()=> nextSlide());
+q('#prev').addEventListener('click', ()=> prevSlide());
+
+/* ---------------- UI: Ads Table (Admin) ---------------- */
+function renderAdsTable(arr){
+  const tbody = q('#ads-table tbody');
+  tbody.innerHTML = '';
+  (arr || ads).forEach((a, idx) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${idx+1}</td><td>${escapeHtml(a.type)}</td><td style="max-width:420px;word-break:break-all">${escapeHtml(a.src)}</td><td>${escapeHtml(a.caption||'')}</td>
+      <td><button data-idx="${idx}" class="del">Delete</button></td>`;
+    tbody.appendChild(tr);
+  });
+  $$('.del').forEach(b => b.addEventListener('click', async (e) => {
+    const idx = parseInt(e.target.dataset.idx);
+    // delete locally and attempt delete via API if available (not implemented server delete in sample)
+    ads.splice(idx,1);
+    saveLocalAds(ads);
+    renderSlides(); renderAdsTable(ads);
+  }));
+}
+
+/* ---------------- Bootstrapping: fetch ads from API (fallback localStorage) ---------------- */
+async function loadAndRenderAds(){
+  // primary: try API
+  let fetched = null;
+  try{
+    fetched = await apiGetAds();
+    // normalize mapping if API returns objects; ensure fields: id,type,src,caption,duration
+    if(Array.isArray(fetched) && fetched.length>0) {
+      ads = fetched.map((it, i) => ({
+        id: it.id || it._id || 'api'+i,
+        type: it.type || (it.src && it.src.endsWith('.m3u8')?'video':'image'),
+        src: it.src || it.url || it.srcUrl,
+        caption: it.caption || it.title || '',
+        duration: it.durationMs || it.duration || 5000
+      }));
+      // save to localStorage as cache/fallback
+      saveLocalAds(ads);
+    } else {
+      ads = loadLocalAds();
+    }
+  }catch(e){
+    ads = loadLocalAds();
+  }
+  renderSlides(); renderAdsTable(ads);
+}
+
+/* apiGetAds uses fetch — defined below to allow centralized error handling */
+async function apiGetAds(){
+  const url = ADS_API;
+  const res = await fetch(url, { method:'GET', credentials:'include' });
+  if(!res.ok) throw new Error('ads fetch failed');
+  const data = await res.json();
+  // if API returns { data: [...] } handle
+  if(Array.isArray(data)) return data;
+  if(Array.isArray(data.data)) return data.data;
+  throw new Error('unexpected ads response');
+}
+
+/* ---------------- Signup / Login wiring ---------------- */
+q('#btn-signup').addEventListener('click', async ()=>{
+  const name = q('#su-name').value.trim();
+  const email = q('#su-email').value.trim().toLowerCase();
+  const pw = q('#su-password').value;
+  const role = q('#su-role').value;
+  const msg = q('#su-msg'); msg.textContent = '';
+  if(!name || !email || pw.length < 6){ msg.textContent = 'กรุณากรอกข้อมูลให้ครบและรหัสผ่านอย่างน้อย 6 ตัว'; return; }
+  // call API (if available), otherwise create local user and auto-login
+  try{
+    if(SIGNUP_API && SIGNUP_API !== '/api/auth/signup'){
+      // custom base set: use API
+    }
+    let resp = null;
+    try {
+      resp = await apiSignup({ email, password: pw, name, role });
+    } catch(err){
+      // API failed: fallback to localStorage creation (demo)
+      const users = JSON.parse(localStorage.getItem('demo_users_v1') || '[]');
+      const hash = await sha256(pw);
+      users.push({ email, name, passwordHash: hash, role, createdAt: now() });
+      localStorage.setItem('demo_users_v1', JSON.stringify(users));
+      resp = { user:{ email, name, role }, token: null };
+    }
+    // if resp.token exists, store token and user
+    if(resp.token){ saveTokenAndUser(resp.token, resp.user); }
+    else { // local fallback
+      saveUserLocalSession(resp.user);
+    }
+    msg.textContent = 'สมัครสมาชิกสำเร็จ';
+    renderUserArea();
+    refreshAdminUI();
+  }catch(e){
+    console.error(e);
+    q('#su-msg').textContent = e.message || 'signup failed';
+  }
+});
+
+q('#btn-login').addEventListener('click', async ()=>{
+  const email = q('#li-email').value.trim().toLowerCase();
+  const pw = q('#li-password').value;
+  const msg = q('#li-msg'); msg.textContent = '';
+  if(!email || !pw){ msg.textContent = 'กรุณากรอกอีเมลและรหัสผ่าน'; return; }
+  try{
+    let resp = null;
+    try {
+      resp = await apiLogin({ email, password: pw });
+    } catch(apiErr){
+      // fallback local validation
+      const users = JSON.parse(localStorage.getItem('demo_users_v1') || '[]');
+      const hash = await sha256(pw);
+      const u = users.find(x=>x.email===email && x.passwordHash===hash);
+      if(!u) throw new Error('invalid credentials');
+      resp = { user: { email:u.email, name:u.name, role:u.role }, token: null };
+    }
+    if(resp.token){ saveTokenAndUser(resp.token, resp.user); }
+    else { saveUserLocalSession(resp.user); }
+    msg.textContent = 'เข้าสู่ระบบสำเร็จ';
+    renderUserArea();
+    refreshAdminUI();
+  }catch(e){
+    console.error(e);
+    msg.textContent = e.message || 'login failed';
+  }
+});
+
+/* Helper to call API signup/login - wrap with try/catch by caller */
+async function apiSignup(body){ return await apiJsonPost(SIGNUP_API, body); }
+async function apiLogin(body){ return await apiJsonPost(LOGIN_API, body); }
+async function apiJsonPost(url, body){
+  const res = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body), credentials:'include' });
+  const j = await res.json();
+  if(!res.ok) throw j;
+  return j;
+}
+
+/* Save user/token handling (demo) */
+function saveTokenAndUser(token, user){
+  saveToken(token);
+  saveUser(user);
+}
+function saveToken(token){ localStorage.setItem(TOKEN_KEY, token); }
+function saveUser(user){ localStorage.setItem(USER_KEY, JSON.stringify(user)); }
+function saveUserLocalSession(user){
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+/* token getters */
+function loadToken(){ return localStorage.getItem(TOKEN_KEY); }
+function loadUser(){ try{ return JSON.parse(localStorage.getItem(USER_KEY) || 'null'); }catch(e){ return null; } }
+
+/* Logout UI */
+function logout(){
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  renderUserArea();
+  refreshAdminUI();
+}
+
+/* Render header user area */
+function renderUserArea(){
+  const ua = q('#user-area');
+  const user = loadUser();
+  ua.innerHTML = '';
+  if(user){
+    const span = document.createElement('div'); span.className='small'; span.textContent = `Hi, ${user.name} (${user.role})`;
+    ua.appendChild(span);
+    const btn = document.createElement('button'); btn.className='primary'; btn.textContent='Logout';
+    btn.addEventListener('click', logout);
+    ua.appendChild(btn);
+  } else {
+    const su = document.createElement('button'); su.textContent='Sign up'; su.addEventListener('click', ()=> showModalFor('#su-name'));
+    const li = document.createElement('button'); li.textContent='Log in'; li.addEventListener('click', ()=> showModalFor('#li-email'));
+    ua.appendChild(su); ua.appendChild(li);
+  }
+}
+
+/* Modal helper */
+function showModalFor(selector){
+  const el = document.querySelector(selector);
+  if(!el) return;
+  const card = el.closest('.card');
+  if(!card) return;
+  const modal = q('#modal'); const body = q('#modal-body'); body.innerHTML = ''; body.appendChild(card.cloneNode(true));
+  modal.style.display = 'flex';
+  // wire cloned form buttons to call existing handlers
+  const cloneSignup = body.querySelector('#btn-signup');
+  const cloneLogin = body.querySelector('#btn-login');
+  if(cloneSignup) cloneSignup.addEventListener('click', ()=> { q('#btn-signup').click(); modal.style.display='none'; });
+  if(cloneLogin) cloneLogin.addEventListener('click', ()=> { q('#btn-login').click(); modal.style.display='none'; });
+}
+q('#modal-close').addEventListener('click', ()=> q('#modal').style.display='none');
+
+/* ---------------- admin UI visibility & actions ---------------- */
+function refreshAdminUI(){
+  const user = loadUser();
+  const mgr = q('#ads-manager');
+  if(user && user.role === 'ADMIN'){ mgr.style.display = 'block'; }
+  else mgr.style.display = 'none';
+}
+
+/* Add ad handler: creates locally and tries backend POST /api/ads if token present */
+q('#btn-add-ad').addEventListener('click', async ()=>{
+  const type = q('#ad-type').value;
+  const src = q('#ad-src').value.trim();
+  const thumb = q('#ad-thumb').value.trim();
+  const caption = q('#ad-caption').value.trim();
+  const duration = parseInt(q('#ad-duration').value) || (type==='video'?8000:5000);
+  if(!src){ alert('กรุณาใส่ URL'); return; }
+  const ad = { id:'local'+Date.now(), type, src, thumb, caption, duration };
+  // optimistic local add
+  ads.push(ad); saveLocalAds(ads); renderSlides(); renderAdsTable(ads);
+  // try to POST to server if token available
+  const token = loadToken();
+  if(token){
+    try {
+      const res = await fetch(ADS_API, { method:'POST', headers: {'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify({ type, src, caption, thumb, durationMs: duration }), credentials:'include' });
+      if(!res.ok) throw new Error('api error');
+      const created = await res.json();
+      // replace local ad id with server id (if returned)
+      ad.id = created.id || created._id || ad.id;
+      saveLocalAds(ads);
+      renderAdsTable(ads);
+    } catch(err){
+      console.warn('POST /api/ads failed', err);
+    }
+  } else {
+    console.warn('No token: ad saved to local cache only');
+  }
+  // clear fields
+  q('#ad-src').value=''; q('#ad-thumb').value=''; q('#ad-caption').value=''; q('#ad-duration').value='';
+});
+
+/* ---------------- SHA-256 helper for local fallback password hashing (demo only) ---------------- */
+async function sha256(msg){
+  const enc = new TextEncoder();
+  const data = enc.encode(msg);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+/* ---------------- Init: load ads, user, UI wiring ---------------- */
+(async function init(){
+  // load cached ads quickly
+  ads = loadLocalAds();
+  renderSlides(); renderAdsTable(ads);
+  // then try API
+  try{
+    const fromApi = await apiGetAds();
+    if(Array.isArray(fromApi) && fromApi.length > 0){
+      ads = fromApi.map((it, i) => ({ id: it.id || it._id || 'api'+i, type: it.type || (it.src && it.src.endsWith('.m3u8')?'video':'image'), src: it.src || it.url, caption: it.caption || it.title || '', duration: it.durationMs || it.duration || 5000 }));
+      saveLocalAds(ads); renderSlides(); renderAdsTable(ads);
+    }
+  }catch(e){ /* fallback already rendered */ console.warn('ads API not available, using cache/local'); }
+
+  // render user area and admin area
+  renderUserArea(); refreshAdminUI();
+
+  // wire signup/login buttons (already added above)
+})();
+
+  </script>
+</body>
+</html>

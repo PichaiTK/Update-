@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MyApp Demo — Ads Carousel + Auth</title>
+
+  <link rel="stylesheet" href="./styles.css" />
+
+  <!-- hls.js for HLS playback on non-Safari -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+  <header class="header">
+    <div class="brand">PichaiTK​</div>
+    <div class="spacer"></div>
+    <div id="user-area" class="user-area"></div>
+  </header>
+
+  <main class="container">
+    <!-- Ads Carousel -->
+    <section class="card">
+      <h3>Ads Carousel (Auto-slide)</h3>
+      <div id="carousel" class="carousel" aria-roledescription="carousel">
+        <div id="slides" class="slides"></div>
+        <div class="controls">
+          <button id="prev">◀</button>
+          <button id="next">▶</button>
+        </div>
+        <div id="indicators" class="indicators"></div>
+      </div>
+      <p class="muted">Hover to pause. Video ads autoplay muted. Admins: manage ads below.</p>
+    </section>
+
+    <!-- Auth -->
+    <section class="card auth-section">
+      <div class="auth-grid">
+        <div class="auth-form">
+          <h4>Sign Up</h4>
+          <input id="su-name" placeholder="Full name" />
+          <input id="su-email" placeholder="Email" />
+          <input id="su-password" placeholder="Password (min 6)" type="password" />
+          <select id="su-role"><option>USER</option><option>PREMIUM</option></select>
+          <button id="btn-signup">Create account</button>
+          <div id="su-msg" class="small muted"></div>
+        </div>
+
+        <div class="auth-form">
+          <h4>Log In</h4>
+          <input id="li-email" placeholder="Email" />
+          <input id="li-password" placeholder="Password" type="password" />
+          <button id="btn-login">Sign in</button>
+          <div id="li-msg" class="small muted"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Admin Ads Manager -->
+    <section class="card" id="ads-manager" style="display:none">
+      <h4>Ads Manager (Admin)</h4>
+      <div class="ad-controls">
+        <select id="ad-type"><option value="image">Image</option><option value="video">Video (MP4/HLS)</option></select>
+        <input id="ad-src" placeholder="Media URL (.jpg/.png or .mp4/.m3u8)" />
+        <input id="ad-thumb" placeholder="Thumbnail (optional)" />
+        <input id="ad-caption" placeholder="Caption (optional)" />
+        <input id="ad-duration" type="number" placeholder="Duration ms (image)" />
+        <button id="btn-add-ad">Add Ad</button>
+      </div>
+      <table id="ads-table">
+        <thead><tr><th>#</th><th>Type</th><th>Src</th><th>Caption</th><th>Action</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="card">
+      <h4>Notes</h4>
+      <p class="small muted">
+        This is a frontend demo. Move auth + ads storage to backend (Express/NestJS + DB) for production.
+      </p>
+    </section>
+  </main>
+
+  <div id="modal" class="modal" style="display:none">
+    <div class="modal-inner">
+      <div id="modal-body"></div>
+      <div style="text-align:right;margin-top:8px"><button id="modal-close">Close</button></div>
+    </div>
+  </div>
+
+  <!-- app scripts -->
+  <script src="./auth.js" defer></script>
+  <script src="./ads.js" defer></script>
+</body>
+</html>
